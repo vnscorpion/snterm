@@ -61,9 +61,9 @@ dotnet run --project src/SNTerm
   - Chọn file và bấm nút **Download** hoặc chuột phải chọn **Download** để tải về máy.
 
 ### Chuyển danh sách VM sang máy khác (Export / Import)
-1. Trên máy cũ: Bấm nút **"⇪ Export"**, chọn các VM cần xuất, chọn **"Kèm mật khẩu, bảo vệ bằng mật khẩu Export"**, nhập mật khẩu bảo vệ file và bấm **Export...**.
+1. Trên máy cũ: Bấm nút **"Export"**, chọn các VM cần xuất, chọn **"Kèm mật khẩu, bảo vệ bằng mật khẩu Export"**, nhập mật khẩu bảo vệ file và bấm **Export...**.
 2. Chép file `.snterm` sang máy tính mới.
-3. Trên máy mới: Mở SN Term, bấm nút **"⇩ Import"** (hoặc kéo thả file `.snterm` vào cửa sổ ứng dụng), nhập mật khẩu Export và bấm **Import**. Mọi thông tin và mật khẩu sẽ tự động được giải mã và mã hóa lại an toàn theo tài khoản máy mới.
+3. Trên máy mới: Mở SN Term, bấm nút **"Import"** (hoặc kéo thả file `.snterm` vào cửa sổ ứng dụng), nhập mật khẩu Export và bấm **Import**. Mọi thông tin và mật khẩu sẽ tự động được giải mã và mã hóa lại an toàn theo tài khoản máy mới.
 
 ---
 

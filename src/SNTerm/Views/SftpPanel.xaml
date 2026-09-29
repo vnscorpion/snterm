@@ -49,6 +49,7 @@
                       ItemsSource="{Binding Items}"
                       SelectedItem="{Binding SelectedItem}"
                       SelectionMode="Extended"
+                      IsTextSearchEnabled="True" TextSearch.TextPath="Name"
                       BorderThickness="0"
                       Background="{DynamicResource ThemeWindowBackground}"
                       Foreground="{DynamicResource ThemeForeground}"

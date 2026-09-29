@@ -59,6 +59,7 @@ dotnet run --project src/SNTerm
   - Chuyển sang tab **SFTP** ở cột trái.
   - Kéo file/thư mục từ máy tính thả vào danh sách SFTP để tải lên.
   - Chọn file và bấm nút **Download** hoặc chuột phải chọn **Download** để tải về máy.
+  - **Tìm nhanh bằng bàn phím**: Trong danh sách SFTP, gõ chữ cái đầu tên file/thư mục (ví dụ `n` hoặc `ng`) để nhảy tới mục đó. Bấm lặp cùng một chữ để chuyển sang mục kế tiếp có cùng chữ đầu.
 
 ### Chuyển danh sách VM sang máy khác (Export / Import)
 1. Trên máy cũ: Bấm nút **"Export"**, chọn các VM cần xuất, chọn **"Kèm mật khẩu, bảo vệ bằng mật khẩu Export"**, nhập mật khẩu bảo vệ file và bấm **Export...**.

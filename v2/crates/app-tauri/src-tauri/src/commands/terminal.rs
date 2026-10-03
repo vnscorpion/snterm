@@ -39,6 +39,7 @@ pub struct TabInner {
     pub monitor_wake: Notify,
     pub transfer_cancel: Arc<AtomicBool>,
     pub closed: AtomicBool,
+    pub recent_input: std::sync::Mutex<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -221,6 +222,7 @@ pub async fn terminal_open(
         monitor_wake: Notify::new(),
         transfer_cancel: Arc::new(AtomicBool::new(false)),
         closed: AtomicBool::new(false),
+        recent_input: std::sync::Mutex::new(String::new()),
     });
     state.tabs.lock().unwrap_or_else(|e| e.into_inner()).insert(
         tab_id.clone(),
@@ -485,9 +487,53 @@ pub async fn terminal_input(app: AppHandle, state: State<'_, AppState>, tab_id: 
     }
     let ssh = inner.ssh.lock().await.clone();
     if let Some(ssh) = ssh {
+        track_reboot_command(&inner, &data, &ssh);
         let _ = ssh.send_input(data.as_bytes()).await;
     }
     Ok(())
+}
+
+/// Ghi nhớ dòng lệnh gần nhất; nếu người dùng gõ reboot/shutdown rồi Enter → thăm dò kết nối
+/// mỗi 0,8 s trong ~12 s (giống `CheckHealthNow` v1) để báo ngắt ngay thay vì chờ keepalive.
+fn track_reboot_command(inner: &Arc<TabInner>, data: &str, ssh: &Arc<SshSession>) {
+    let mut buf = inner.recent_input.lock().unwrap_or_else(|e| e.into_inner());
+    if data.contains('\r') || data.contains('\n') {
+        let line = buf.trim().to_lowercase();
+        buf.clear();
+        let is_reboot = line == "reboot"
+            || line.ends_with(" reboot")
+            || line.contains("reboot ")
+            || line.contains("shutdown -r")
+            || line.contains("shutdown -h")
+            || line.contains("init 6")
+            || line.contains("systemctl reboot")
+            || line.contains("poweroff");
+        if is_reboot {
+            let ssh = ssh.clone();
+            tauri::async_runtime::spawn(async move {
+                for _ in 0..15 {
+                    tokio::time::sleep(Duration::from_millis(800)).await;
+                    if !ssh.is_alive() {
+                        break;
+                    }
+                    if matches!(ssh.exec("true", Duration::from_secs(2)).await, Err(CoreError::Timeout) | Err(CoreError::ConnectionLost)) {
+                        ssh.link.mark_closed(Some(CoreError::ConnectionLost));
+                        break;
+                    }
+                }
+            });
+        }
+    } else if data.len() < 100 {
+        if data == "\u{8}" || data == "\u{7f}" {
+            buf.pop();
+        } else {
+            buf.push_str(data);
+            if buf.len() > 200 {
+                let cut = buf.len() - 100;
+                buf.drain(..cut);
+            }
+        }
+    }
 }
 
 #[tauri::command]

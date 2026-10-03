@@ -1,0 +1,12 @@
+Port 2222
+ListenAddress 127.0.0.1
+HostKey /home/user/snterm/v2/tests/sshd/ssh_host_ed25519_key
+PasswordAuthentication yes
+KbdInteractiveAuthentication yes
+PubkeyAuthentication yes
+AuthorizedKeysFile /home/user/snterm/v2/tests/sshd/authorized_keys
+Subsystem sftp /usr/lib/openssh/sftp-server
+PidFile /home/user/snterm/v2/tests/sshd/sshd.pid
+UsePAM no
+PermitRootLogin no
+LogLevel VERBOSE

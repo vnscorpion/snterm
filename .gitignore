@@ -51,3 +51,16 @@ SNTerm-portable.zip
 ## User session backups & dumps
 *.mxtsessions
 Screenshot*.png
+
+## v2 test sshd artifacts
+v2/tests/sshd/*_key
+v2/tests/sshd/*_key.pub
+v2/tests/sshd/client_*
+v2/tests/sshd/authorized_keys
+v2/tests/sshd/sshd.pid
+v2/tests/sshd/sshd.log
+v2/target/
+v2/crates/app-tauri/node_modules/
+v2/crates/app-tauri/dist/
+v2/crates/app-tauri/src-tauri/gen/
+v2/crates/app-tauri/scripts/out/

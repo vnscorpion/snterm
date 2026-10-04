@@ -64,3 +64,4 @@ v2/crates/app-tauri/node_modules/
 v2/crates/app-tauri/dist/
 v2/crates/app-tauri/src-tauri/gen/
 v2/crates/app-tauri/scripts/out/
+v2/dist-win/

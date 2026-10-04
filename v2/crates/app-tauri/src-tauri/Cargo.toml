@@ -7,7 +7,7 @@ description = "SN Term - SSH/SFTP client for VMs"
 
 [lib]
 name = "snterm_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = ["rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

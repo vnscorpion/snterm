@@ -1,0 +1,4 @@
+# Cross-compile sang Windows từ Linux (chỉ để tạo bản thử; bản chính thức build bằng MSVC trên Windows / GitHub Actions)
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+ar = "x86_64-w64-mingw32-ar"

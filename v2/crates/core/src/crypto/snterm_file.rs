@@ -460,6 +460,7 @@ pub fn import(
                         if let Some(k) = &resolved_key_path {
                             existing.key_file_path = Some(k.clone());
                         }
+                        existing.touch();
                     }
                     result.overwritten_count += 1;
                     continue;
@@ -478,6 +479,7 @@ pub fn import(
                         key_file_path: resolved_key_path.clone(),
                         created_at: Utc::now(),
                         last_connected_at: None,
+                        updated_at: Some(Utc::now()),
                         extra: serde_json::Map::new(),
                     });
                     result.added_copy_count += 1;
@@ -500,6 +502,7 @@ pub fn import(
             key_file_path: resolved_key_path,
             created_at: Utc::now(),
             last_connected_at: None,
+            updated_at: Some(Utc::now()),
             extra: serde_json::Map::new(),
         });
         result.imported_count += 1;

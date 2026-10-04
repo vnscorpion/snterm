@@ -39,3 +39,14 @@ export interface ImportFileInfo { path: string; fileName: string; format: string
 export interface ImportResult { totalInFile: number; importedCount: number; skippedCount: number; overwrittenCount: number; addedCopyCount: number; corruptSecretsCount: number; messages: string[]; }
 export interface ExportOutcome { exported: number; path: string; messages: string[]; }
 export interface AppInfo { version: string; dataDir: string; localDir: string; logsDir: string; backupsDir: string; platform: string; }
+
+export interface SyncBackendConfig { backendType: 'Folder' | 'Sftp'; folderPath: string; sftpSessionId: string | null; sftpRemotePath: string; }
+export interface SyncStatus {
+  enabled: boolean; state: 'never' | 'idle' | 'running' | 'offline' | 'needPassword' | 'error';
+  lastSyncAt: string | null; lastError: string | null; backendLabel: string; backendType: string; folderPath: string;
+  sftpSessionId: string | null; sftpRemotePath: string; intervalMinutes: number; includeKeyFiles: boolean; lastRevision: number; deviceName: string;
+}
+export interface MergeReport { addLocal: string[]; updateLocal: string[]; deleteLocal: string[]; toRemote: number; mergedDuplicates: string[]; }
+export interface SyncPreview { remoteExisted: boolean; report: MergeReport; localCount: number; messages: string[]; }
+export interface SyncOutcome { report: MergeReport; localChanged: boolean; remoteWritten: boolean; revision: number; remoteExisted: boolean; messages: string[]; }
+export interface SyncTestResult { vaultExists: boolean; label: string; }

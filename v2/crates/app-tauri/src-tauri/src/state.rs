@@ -6,6 +6,7 @@ use snterm_core::paths::AppPaths;
 use snterm_core::store::{AppSettings, KnownHostsStore, SessionStore, SettingsStore};
 use tokio::sync::oneshot;
 
+use crate::commands::sync::SyncManager;
 use crate::commands::terminal::TabHandle;
 
 /// Câu trả lời của người dùng cho hộp thoại do lõi yêu cầu (host key / mật khẩu).
@@ -27,6 +28,7 @@ pub struct AppState {
     /// Hàng đợi hộp thoại: chỉ một hộp thoại cần người dùng trả lời tại một thời điểm (như v1).
     pub dialog_gate: Arc<tokio::sync::Mutex<()>>,
     pub connect_gate: Arc<tokio::sync::Semaphore>,
+    pub sync: SyncManager,
 }
 
 impl AppState {
@@ -45,6 +47,7 @@ impl AppState {
             pending_dialogs: Mutex::new(HashMap::new()),
             dialog_gate: Arc::new(tokio::sync::Mutex::new(())),
             connect_gate: Arc::new(tokio::sync::Semaphore::new(max_parallel)),
+            sync: SyncManager::new(),
         }
     }
 

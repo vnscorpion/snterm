@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::error::CoreResult;
 use crate::paths::{atomic_write, AppPaths};
-use super::model::{Session, SessionFileEnvelope};
+use super::model::{Session, SessionFileEnvelope, Tombstone};
 
 pub struct SessionStore {
     paths: AppPaths,
@@ -20,13 +20,19 @@ struct State {
     last_daily_backup: Option<String>,
     /// Trường lạ ở envelope (giữ nguyên khi ghi lại).
     envelope_extra: serde_json::Map<String, serde_json::Value>,
+    /// Tombstone (VM đã xóa) đọc được lần gần nhất; giữ khi `save()` thường.
+    deleted: Vec<Tombstone>,
 }
 
 #[derive(Debug, Default)]
 pub struct LoadResult {
     pub sessions: Vec<Session>,
+    pub deleted: Vec<Tombstone>,
     pub recovered_from_corruption: bool,
 }
+
+/// Giữ tombstone tối đa 180 ngày.
+pub const TOMBSTONE_KEEP_DAYS: i64 = 180;
 
 impl SessionStore {
     pub fn new(paths: AppPaths) -> Self {
@@ -46,8 +52,9 @@ impl SessionStore {
             Ok(env) => {
                 if let Ok(mut st) = self.state.lock() {
                     st.envelope_extra = env.extra.clone();
+                    st.deleted = env.deleted.clone();
                 }
-                LoadResult { sessions: env.sessions, recovered_from_corruption: false }
+                LoadResult { sessions: env.sessions, deleted: env.deleted, recovered_from_corruption: false }
             }
             Err(err) => {
                 tracing::warn!("sessions.json hỏng: {err}");
@@ -58,12 +65,12 @@ impl SessionStore {
                 if let Some(latest) = self.latest_backup() {
                     if let Ok(json) = std::fs::read_to_string(&latest) {
                         if let Ok(env) = serde_json::from_str::<SessionFileEnvelope>(strip_bom(&json)) {
-                            let _ = self.save(&env.sessions);
-                            return LoadResult { sessions: env.sessions, recovered_from_corruption: true };
+                            let _ = self.save_with_tombstones(&env.sessions, &env.deleted);
+                            return LoadResult { sessions: env.sessions, deleted: env.deleted, recovered_from_corruption: true };
                         }
                     }
                 }
-                LoadResult { sessions: Vec::new(), recovered_from_corruption: true }
+                LoadResult { sessions: Vec::new(), deleted: Vec::new(), recovered_from_corruption: true }
             }
         }
     }
@@ -83,16 +90,58 @@ impl SessionStore {
         files.pop()
     }
 
+    /// Lưu danh sách, giữ nguyên tombstone đã có.
     pub fn save(&self, sessions: &[Session]) -> CoreResult<()> {
+        let deleted = self.state.lock().unwrap_or_else(|e| e.into_inner()).deleted.clone();
+        self.save_with_tombstones(sessions, &deleted)
+    }
+
+    /// Lưu danh sách + tombstone (dọn tombstone quá 180 ngày và tombstone của VM còn tồn tại).
+    pub fn save_with_tombstones(&self, sessions: &[Session], deleted: &[Tombstone]) -> CoreResult<()> {
+        let cutoff = chrono::Utc::now() - chrono::Duration::days(TOMBSTONE_KEEP_DAYS);
+        let mut cleaned: Vec<Tombstone> = Vec::new();
+        for t in deleted {
+            if t.deleted_at < cutoff || sessions.iter().any(|s| s.id == t.id) || cleaned.iter().any(|c| c.id == t.id) {
+                continue;
+            }
+            cleaned.push(t.clone());
+        }
         let extra = {
             let mut st = self.state.lock().unwrap_or_else(|e| e.into_inner());
             self.perform_daily_backup_if_needed(&mut st);
+            st.deleted = cleaned.clone();
             st.envelope_extra.clone()
         };
-        let env = SessionFileEnvelope { version: 1, sessions: sessions.to_vec(), extra };
+        let env = SessionFileEnvelope { version: 1, sessions: sessions.to_vec(), deleted: cleaned, extra };
         let json = serde_json::to_string_pretty(&env)?;
         atomic_write(&self.paths.sessions_file(), json.as_bytes())?;
         Ok(())
+    }
+
+    /// Xóa VM theo id và ghi tombstone.
+    pub fn delete_sessions(&self, ids: &[Uuid]) -> CoreResult<usize> {
+        let r = self.load();
+        let before = r.sessions.len();
+        let keep: Vec<Session> = r.sessions.into_iter().filter(|s| !ids.contains(&s.id)).collect();
+        let mut deleted = r.deleted;
+        let now = chrono::Utc::now();
+        for id in ids {
+            deleted.push(Tombstone { id: *id, deleted_at: now });
+        }
+        self.save_with_tombstones(&keep, &deleted)?;
+        Ok(before - keep.len())
+    }
+
+    /// Sao lưu trước lần đồng bộ đầu tiên.
+    pub fn backup_before_sync(&self) -> Option<PathBuf> {
+        let file = self.paths.sessions_file();
+        if !file.exists() {
+            return None;
+        }
+        let ts = Local::now().format("%Y%m%d-%H%M%S");
+        let backup = self.paths.backups_dir().join(format!("sessions-before-sync-{ts}.json"));
+        std::fs::copy(&file, &backup).ok()?;
+        Some(backup)
     }
 
     /// Cập nhật (hoặc thêm) một VM rồi lưu ngay.
@@ -231,13 +280,36 @@ mod tests {
     }
 
     #[test]
+    fn delete_writes_tombstones_and_keeps_them_on_plain_save() {
+        let (_d, p) = temp_paths();
+        let store = SessionStore::new(p.clone());
+        let mut a = Session::default();
+        a.host = "a".into();
+        a.username = "u".into();
+        let mut b = a.clone();
+        b.id = Uuid::new_v4();
+        store.save(&[a.clone(), b.clone()]).unwrap();
+        assert_eq!(store.delete_sessions(&[a.id]).unwrap(), 1);
+        let r = store.load();
+        assert_eq!(r.sessions.len(), 1);
+        assert_eq!(r.deleted.len(), 1);
+        assert_eq!(r.deleted[0].id, a.id);
+        store.save(&r.sessions).unwrap();
+        assert_eq!(store.load().deleted.len(), 1);
+        // Tombstone cũ bị dọn
+        let old = Tombstone { id: Uuid::new_v4(), deleted_at: chrono::Utc::now() - chrono::Duration::days(200) };
+        store.save_with_tombstones(&r.sessions, &[old, r.deleted[0].clone()]).unwrap();
+        assert_eq!(store.load().deleted.len(), 1);
+    }
+
+    #[test]
     fn keeps_unknown_envelope_fields() {
         let (_d, p) = temp_paths();
-        std::fs::write(p.sessions_file(), r#"{"version":1,"sessions":[],"Deleted":[{"Id":"x"}]}"#).unwrap();
+        std::fs::write(p.sessions_file(), r#"{"version":1,"sessions":[],"FutureField":[{"Id":"x"}]}"#).unwrap();
         let store = SessionStore::new(p.clone());
         let _ = store.load();
         store.save(&[]).unwrap();
         let raw = std::fs::read_to_string(p.sessions_file()).unwrap();
-        assert!(raw.contains("Deleted"));
+        assert!(raw.contains("FutureField"));
     }
 }

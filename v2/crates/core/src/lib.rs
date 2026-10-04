@@ -5,3 +5,4 @@ pub mod store;
 pub mod crypto;
 pub mod import;
 pub mod ssh;
+pub mod sync;

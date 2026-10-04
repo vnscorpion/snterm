@@ -183,3 +183,40 @@ async fn wrong_password_host_key_rejection_and_refused_port() {
     p.connect_timeout = Duration::from_secs(2);
     assert!(matches!(SshSession::connect(p, rec).await, Err(CoreError::Timeout) | Err(CoreError::Connect(_))));
 }
+
+#[tokio::test]
+async fn sftp_sync_backend_roundtrip_with_permissions() {
+    if !sshd_available() { return; }
+    use snterm_core::sync::backend::sftp::SftpBackend;
+    use snterm_core::sync::backend::SyncBackend;
+    let rec = Arc::new(Recorder { seen: Default::default(), accept: true });
+    let remote_path = format!("~/.snterm-test-{}/sync.vault", std::process::id());
+    let b = SftpBackend { params: params(Some(PASS), None, None), verifier: rec.clone(), remote_path: remote_path.clone(), label: "sntest".into() };
+    b.test().await.expect("test backend");
+    assert!(b.read().await.unwrap().is_none());
+    b.write(b"v1 content").await.unwrap();
+    assert_eq!(b.read().await.unwrap().unwrap().content, b"v1 content");
+    b.write(b"v2").await.unwrap();
+    assert_eq!(b.read().await.unwrap().unwrap().content, b"v2");
+    assert_eq!(b.read_meta().await.unwrap().unwrap().len, 2);
+    // Quyền 700 thư mục, 600 file
+    let ssh = SshSession::connect(params(Some(PASS), None, None), rec.clone()).await.unwrap();
+    let sftp = SftpClient::new(ssh.open_sftp().await.unwrap()).await.unwrap();
+    let dir = format!("{}/.snterm-test-{}", sftp.home, std::process::id());
+    let items = sftp.list_dir(&dir, true).await.unwrap();
+    let f = items.iter().find(|i| i.name == "sync.vault").unwrap();
+    assert_eq!(f.permissions, "-rw-------");
+    assert!(!items.iter().any(|i| i.name.ends_with(".tmp")));
+    let parent = sftp.list_dir(&sftp.home.clone(), true).await.unwrap();
+    let d = parent.iter().find(|i| i.name == format!(".snterm-test-{}", std::process::id())).unwrap();
+    assert_eq!(d.permissions, "drwx------");
+    b.delete_vault().await.unwrap();
+    assert!(b.read().await.unwrap().is_none());
+    sftp.remove(&dir, true).await.unwrap();
+    sftp.close().await;
+    ssh.disconnect().await;
+    // Host key chưa tin cậy → lỗi rõ ràng, không treo
+    let reject = Arc::new(Recorder { seen: Default::default(), accept: false });
+    let b2 = SftpBackend { params: params(Some(PASS), None, None), verifier: reject, remote_path, label: "x".into() };
+    assert!(matches!(b2.test().await, Err(CoreError::HostKeyRejected)));
+}

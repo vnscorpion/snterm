@@ -15,7 +15,7 @@
       {#if box.icon}<div style="font-size:22px; line-height:1;">{icons[box.icon]}</div>{/if}
       <div style="flex:1; white-space:pre-wrap; user-select:text;">{box.text}{#if box.detail}<div class="muted" style="margin-top:8px; font-size:12px;">{box.detail}</div>{/if}
         {#if box.kind === 'input'}
-          <input class="input" style="margin-top:10px" bind:value use:focusEl onkeydown={(e) => { if (e.key === 'Enter') ui.close(box, value); }} />
+          <input class="input" style="margin-top:10px" type={box.password ? 'password' : 'text'} bind:value use:focusEl onkeydown={(e) => { if (e.key === 'Enter') ui.close(box, value); }} />
         {/if}
       </div>
     </div>

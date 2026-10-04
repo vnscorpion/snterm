@@ -24,6 +24,9 @@ pub struct Session {
     pub created_at: DateTime<Utc>,
     #[serde(with = "datetime::optional")]
     pub last_connected_at: Option<DateTime<Utc>>,
+    /// Thời điểm **nội dung** VM đổi (dùng cho đồng bộ). Thiếu (file v1) → bằng `CreatedAt` khi đọc.
+    #[serde(with = "datetime::optional")]
+    pub updated_at: Option<DateTime<Utc>>,
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
@@ -43,6 +46,7 @@ impl Default for Session {
             encrypted_passphrase: None,
             created_at: Utc::now(),
             last_connected_at: None,
+            updated_at: None,
             extra: serde_json::Map::new(),
         }
     }
@@ -72,6 +76,16 @@ impl Session {
         }
     }
 
+    /// `UpdatedAt` hiệu dụng: thiếu thì lấy `CreatedAt`.
+    pub fn effective_updated_at(&self) -> DateTime<Utc> {
+        self.updated_at.unwrap_or(self.created_at)
+    }
+
+    /// Đánh dấu nội dung vừa đổi (gọi ở mọi chỗ sửa tên/nhóm/host/port/user/mật khẩu/key).
+    pub fn touch(&mut self) {
+        self.updated_at = Some(Utc::now());
+    }
+
     pub fn is_key_file_missing(&self) -> bool {
         match &self.key_file_path {
             Some(p) if !p.is_empty() => !std::path::Path::new(p).exists(),
@@ -94,6 +108,7 @@ impl Session {
             encrypted_passphrase: self.encrypted_passphrase.clone(),
             created_at: Utc::now(),
             last_connected_at: None,
+            updated_at: Some(Utc::now()),
             extra: serde_json::Map::new(),
         }
     }
@@ -113,7 +128,23 @@ impl Session {
     }
 }
 
+/// VM đã xóa (giữ để đồng bộ việc xóa sang máy khác).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "PascalCase", default)]
+pub struct Tombstone {
+    pub id: Uuid,
+    #[serde(with = "datetime::required")]
+    pub deleted_at: DateTime<Utc>,
+}
+
+impl Default for Tombstone {
+    fn default() -> Self {
+        Tombstone { id: Uuid::nil(), deleted_at: Utc::now() }
+    }
+}
+
 /// Envelope của `sessions.json`: `{ "version": 1, "sessions": [...] }` (camelCase như v1 ghi).
+/// `Deleted` là phần mở rộng cho đồng bộ; v1 bỏ qua trường này.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct SessionFileEnvelope {
@@ -121,8 +152,52 @@ pub struct SessionFileEnvelope {
     pub version: i32,
     #[serde(rename = "sessions")]
     pub sessions: Vec<Session>,
+    #[serde(rename = "Deleted", skip_serializing_if = "Vec::is_empty")]
+    pub deleted: Vec<Tombstone>,
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+/// Cấu hình đồng bộ (khối `Sync` trong `settings.json`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "PascalCase", default)]
+pub struct SyncSettings {
+    pub enabled: bool,
+    /// "Folder" | "Sftp"
+    pub backend_type: String,
+    pub folder_path: String,
+    pub sftp_session_id: Option<Uuid>,
+    pub sftp_remote_path: String,
+    /// Mật khẩu đồng bộ mã hóa DPAPI (để chạy ngầm).
+    pub encrypted_sync_password: Option<String>,
+    pub interval_minutes: i32,
+    pub include_key_files: bool,
+    pub device_id: Option<Uuid>,
+    pub device_name: String,
+    pub last_revision: i64,
+    #[serde(with = "datetime::optional")]
+    pub last_sync_at: Option<DateTime<Utc>>,
+    pub last_error: Option<String>,
+}
+
+impl Default for SyncSettings {
+    fn default() -> Self {
+        SyncSettings {
+            enabled: false,
+            backend_type: "Folder".into(),
+            folder_path: String::new(),
+            sftp_session_id: None,
+            sftp_remote_path: "~/.snterm/sync.vault".into(),
+            encrypted_sync_password: None,
+            interval_minutes: 15,
+            include_key_files: true,
+            device_id: None,
+            device_name: String::new(),
+            last_revision: 0,
+            last_sync_at: None,
+            last_error: None,
+        }
+    }
 }
 
 /// Tương đương `AppSettings` v1.
@@ -148,6 +223,7 @@ pub struct AppSettings {
     pub window_width: f64,
     pub window_height: f64,
     pub left_column_width: f64,
+    pub sync: SyncSettings,
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
@@ -174,6 +250,7 @@ impl Default for AppSettings {
             window_width: 1100.0,
             window_height: 700.0,
             left_column_width: 400.0,
+            sync: SyncSettings::default(),
             extra: serde_json::Map::new(),
         }
     }
@@ -258,6 +335,23 @@ mod tests {
         assert!(s.save_password);
         assert_eq!(s.display_name(), "u@h");
         assert_eq!(s.effective_group(), UNGROUPED_VI);
+    }
+
+    #[test]
+    fn updated_at_defaults_to_created_and_tombstones_roundtrip() {
+        let env: SessionFileEnvelope = serde_json::from_str(V1_SESSIONS).unwrap();
+        let s = &env.sessions[0];
+        assert!(s.updated_at.is_none());
+        assert_eq!(s.effective_updated_at(), s.created_at);
+        let out = serde_json::to_string(&env).unwrap();
+        assert!(!out.contains("\"Deleted\""), "không ghi Deleted rỗng");
+        let env2: SessionFileEnvelope = serde_json::from_str(r#"{"version":1,"sessions":[],"Deleted":[{"Id":"3f2504e0-4f89-11d3-9a0c-0305e82c3301","DeletedAt":"2026-10-01T00:00:00Z"}]}"#).unwrap();
+        assert_eq!(env2.deleted.len(), 1);
+        let out2 = serde_json::to_string(&env2).unwrap();
+        assert!(out2.contains("\"Deleted\""));
+        let settings: AppSettings = serde_json::from_str(r#"{"Sync":{"Enabled":true,"BackendType":"Sftp"}}"#).unwrap();
+        assert!(settings.sync.enabled);
+        assert_eq!(settings.sync.interval_minutes, 15);
     }
 
     #[test]

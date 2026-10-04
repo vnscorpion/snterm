@@ -8,7 +8,7 @@ Bản viết lại của SN Term theo kế hoạch `SN Term v2 - Phan 1 - Chuyen
 v2/
 ├─ Cargo.toml                      # workspace
 ├─ crates/core/                    # snterm-core: lưu trữ, mã hóa, SSH/SFTP (không phụ thuộc UI)
-│  └─ src/ paths.rs, error.rs, store/, crypto/, import/, ssh/
+│  └─ src/ paths.rs, error.rs, store/, crypto/, import/, ssh/, sync/ (vault, merge, engine, backend/)
 ├─ crates/app-tauri/
 │  ├─ src-tauri/                   # app Tauri: lệnh (commands/), trạng thái, tauri.conf.json, icons
 │  ├─ src/                         # giao diện Svelte: App.svelte, components/, stores/, lib/
@@ -71,14 +71,27 @@ Biến môi trường `SNTERM_DATA_DIR` (chỉ để kiểm thử) chuyển thư
 - Monitor máy chủ chỉ chạy khi tab đang được xem (tạm dừng khi ẩn).
 - Phát hiện mất kết nối: keepalive của `russh` (3 lần × KeepAliveSeconds) + thăm dò nhanh sau lệnh `reboot`/`shutdown`.
 - Hộp thoại host key / mật khẩu do lõi yêu cầu qua sự kiện `dialog:request`, xếp hàng lần lượt như v1.
-- Chừa sẵn cho Phần 2 (đồng bộ): trường lạ trong `sessions.json`/`settings.json` được giữ nguyên; `crypto/snterm_file.rs` tách riêng hàm mã hóa/giải mã khối.
+- Trường lạ trong `sessions.json`/`settings.json` được giữ nguyên; `crypto/snterm_file.rs` tách riêng hàm mã hóa/giải mã khối (dùng chung cho Export và vault đồng bộ).
 
-## Trạng thái (Phần 1, phương án A)
+## Đồng bộ danh sách VM (Phần 2)
+
+Làm theo `SN Term v2 - Phan 2 - Dong bo VM.md`, trên v2 (lõi Rust), không sửa bản C# v1.
+
+**Cách dùng:** nút **Đồng bộ** trên thanh công cụ → hộp thoại 3 bước: (1) chọn kho: thư mục (OneDrive / Google Drive / Dropbox / ổ mạng / USB) hoặc SFTP tới một VM đã có trong danh sách; (2) đặt mật khẩu đồng bộ (lần đầu) hoặc nhập mật khẩu đã có (máy thứ hai); (3) xem trước thay đổi (thêm/sửa/xóa, trùng được gộp) rồi xác nhận. Sau đó app tự đồng bộ: 3 giây sau khi mở, 10 giây sau mỗi lần thêm/sửa/xóa VM, định kỳ theo chu kỳ trong Cài đặt (mặc định 15 phút, tối thiểu 5) và khi đóng app. Thanh trạng thái bên phải hiện lần đồng bộ gần nhất; bấm vào để đồng bộ ngay hoặc xem lỗi. Mục **Đồng bộ** trong Cài đặt: chu kỳ, kèm file key, đổi mật khẩu, nhập lại mật khẩu, tắt (tùy chọn xóa luôn vault).
+
+**Dữ liệu:**
+- Kho chứa đúng một file vault `snterm-sync.vault` (thư mục) hoặc `~/.snterm/sync.vault` (SFTP, chmod 700/600, ghi tạm rồi đổi tên). Vault là file `.snterm` chuẩn (AES-256-GCM, PBKDF2-SHA256 600.000 vòng) nên có thể Import thủ công nếu cần; thêm khối `sync` (revision, deviceId, deviceName, savedAt, tombstones).
+- `sessions.json` thêm `UpdatedAt` cho mỗi VM và danh sách `Deleted` (tombstone, giữ 180 ngày); v1 vẫn đọc được file này (bỏ qua trường lạ). `settings.json` thêm khối `Sync`; mật khẩu đồng bộ lưu bằng DPAPI như mật khẩu VM.
+- Gộp: mới hơn thắng theo `UpdatedAt`; xóa so với sửa cũng theo thời gian; VM trùng (cùng host, cổng, user, tên) tạo trên hai máy được gộp làm một, giữ id cũ hơn. Ghi chen (hai máy cùng ghi) được phát hiện qua metadata và gộp lại. Trước lần đồng bộ đầu tiên app tự sao lưu `sessions.json` vào `backups/`.
+- Mật khẩu đồng bộ, mật khẩu VM, passphrase không bao giờ vào log. SFTP đồng bộ chỉ chạy ngầm với host key đã tin cậy, không bao giờ bật hộp thoại; lỗi mạng chỉ hiện trạng thái "ngoại tuyến" và thử lại ở lần sau.
+
+## Trạng thái (Phần 1 phương án A + Phần 2)
 
 Đã làm và kiểm thử tự động trên Linux (xem `cargo test`, `npm test`, ảnh chụp `scripts/out`):
 - Giai đoạn 0–6 theo kế hoạch: khung dự án, dữ liệu tương thích v1, SSH + terminal + thanh tab, clipboard/phím tắt, SFTP, Export/Import, Cài đặt/log/đóng app.
 - Tích hợp SSH/SFTP chạy thật với `sshd` cục bộ: mật khẩu, key ed25519, key RSA có passphrase, host key, pty resize, tiếng Việt, exec monitor, upload/download/chmod/rename/xóa đệ quy.
 - Crate `snterm-core` và app Tauri type-check sạch cho target Windows (`x86_64-pc-windows-gnu`); DPAPI dùng `windows` crate.
+- Phần 2: unit test vault/gộp/engine (hai máy thêm-sửa-xóa, trùng, tombstone hết hạn, ghi chen, file key, bản sao xung đột `snterm-sync*.vault` của OneDrive); backend SFTP chạy thật với `sshd` cục bộ (quyền 700/600).
 
 Cần kiểm tra **[Tay]** trên Windows thật (chưa có máy Windows trong môi trường phát triển):
 1. `npm run tauri build` ra exe; mở app trên máy đang có v1 → thấy đủ VM, nhấp đúp vào thẳng (mật khẩu DPAPI của v1 giải mã được).
@@ -86,3 +99,4 @@ Cần kiểm tra **[Tay]** trên Windows thật (chưa có máy Windows trong m�
 3. Kéo thả file từ Explorer vào SFTP; mở file bằng Notepad rồi lưu → file trên VM đổi.
 4. Nhấp đúp file `.snterm` mở app và hiện hộp thoại Import.
 5. Đo RAM/khởi động so với v1 theo bảng mục 1 của kế hoạch.
+6. Đồng bộ: hai máy cùng một thư mục OneDrive (hoặc cùng một VM qua SFTP) → máy A thêm/sửa/xóa VM, máy B thấy sau một chu kỳ hoặc khi bấm Đồng bộ ngay; đổi mật khẩu đồng bộ trên A → B báo cần nhập lại; rút mạng → trạng thái "ngoại tuyến", có mạng lại tự chạy; đóng app ngay sau khi sửa VM → vault vẫn được ghi.

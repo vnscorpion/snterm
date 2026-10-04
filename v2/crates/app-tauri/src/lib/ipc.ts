@@ -80,6 +80,8 @@ const defaultSettings: AppSettings = {
   ConfirmMultilinePaste: true, Scrollback: 10000, CursorBlink: true, KeepAliveSeconds: 5, ShowHiddenFiles: true, CustomEditorPath: '',
   CollapsedGroups: [], LastExportFolder: '', LastImportFolder: '', MaxParallelConnects: 4, WindowWidth: 1100, WindowHeight: 700, LeftColumnWidth: 400,
 };
+const mockSync = { enabled: false, last: null as string | null, cfg: {} as Record<string, unknown>,
+  status() { return { enabled: this.enabled, state: this.enabled ? 'idle' : 'never', lastSyncAt: this.last, lastError: null, backendLabel: String(this.cfg.folderPath ?? 'C:\\Users\\An\\OneDrive\\SNTerm'), backendType: String(this.cfg.backendType ?? 'Folder'), folderPath: String(this.cfg.folderPath ?? ''), sftpSessionId: null, sftpRemotePath: '~/.snterm/sync.vault', intervalMinutes: 15, includeKeyFiles: true, lastRevision: 1, deviceName: 'MOCK-PC' }; } };
 const enc = new TextEncoder();
 async function mockInvoke(cmd: string, args: Record<string, unknown>): Promise<unknown> {
   await new Promise((r) => setTimeout(r, 10));
@@ -147,6 +149,14 @@ async function mockInvoke(cmd: string, args: Record<string, unknown>): Promise<u
       { id: '2', name: 'new-vm', subtitle: 'root@10.0.0.9:22', group: 'Dev', status: 'new', existingName: null, hasSecrets: true, keyFileName: null }] } as ImportFileInfo;
     case 'import_sessions': return { totalInFile: 2, importedCount: 1, skippedCount: 1, overwrittenCount: 0, addedCopyCount: 0, corruptSecretsCount: 0, messages: [] } as ImportResult;
     case 'find_mobaxterm_candidate': return null;
+    case 'sync_status': return mockSync.status();
+    case 'sync_test_backend': return { vaultExists: false, label: (args.config as { folderPath: string }).folderPath || 'mock' };
+    case 'sync_preview': return { remoteExisted: false, report: { addLocal: [], updateLocal: [], deleteLocal: [], toRemote: mockSessions().length, mergedDuplicates: [] }, localCount: mockSessions().length, messages: [] };
+    case 'sync_enable': { mockSync.enabled = true; mockSync.cfg = args.config as Record<string, unknown>; mockSync.last = new Date().toISOString(); mockEmit('sync:status', mockSync.status()); return { report: { addLocal: [], updateLocal: [], deleteLocal: [], toRemote: mockSessions().length, mergedDuplicates: [] }, localChanged: false, remoteWritten: true, revision: 1, remoteExisted: false, messages: [] }; }
+    case 'sync_run_now': case 'sync_set_password': { mockSync.last = new Date().toISOString(); mockEmit('sync:status', mockSync.status()); return { report: { addLocal: [], updateLocal: [], deleteLocal: [], toRemote: 0, mergedDuplicates: [] }, localChanged: false, remoteWritten: false, revision: 1, remoteExisted: true, messages: [] }; }
+    case 'sync_disable': { mockSync.enabled = false; mockEmit('sync:status', mockSync.status()); return null; }
+    case 'sync_change_password': case 'sync_update_settings': case 'sync_flush': return null;
+    case 'sync_log': return '[2026-10-04 08:00:00] OK rev=1 thêm=0 cập nhật=0 xóa=0 gửi=5';
     default: throw new Error(`mock: unknown command ${cmd}`);
   }
 }

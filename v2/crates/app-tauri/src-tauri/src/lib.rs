@@ -40,6 +40,7 @@ pub fn run() {
             std::panic::set_hook(Box::new(|info| {
                 log::error!("panic: {info}");
             }));
+            commands::sync::start_scheduler(app.handle());
             // Mở file .snterm truyền qua dòng lệnh lúc khởi động.
             let args: Vec<String> = std::env::args().collect();
             if let Some(file) = args.iter().skip(1).find(|a| a.to_lowercase().ends_with(".snterm")) {
@@ -92,6 +93,17 @@ pub fn run() {
             commands::export_import::import_inspect,
             commands::export_import::import_sessions,
             commands::export_import::find_mobaxterm_candidate,
+            commands::sync::sync_status,
+            commands::sync::sync_test_backend,
+            commands::sync::sync_preview,
+            commands::sync::sync_enable,
+            commands::sync::sync_run_now,
+            commands::sync::sync_disable,
+            commands::sync::sync_set_password,
+            commands::sync::sync_change_password,
+            commands::sync::sync_update_settings,
+            commands::sync::sync_log,
+            commands::sync::sync_flush,
         ])
         .run(tauri::generate_context!())
         .expect("error while running SN Term");

@@ -1,6 +1,6 @@
 use snterm_core::crypto::dpapi;
 use snterm_core::store::Session;
-use tauri::State;
+use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use crate::dto::{SessionDraft, SessionView, SessionsLoad};
@@ -18,7 +18,7 @@ pub fn list_sessions(state: State<'_, AppState>) -> CmdResult<SessionsLoad> {
 
 /// Thêm hoặc sửa VM từ form. Giống `SessionEditorViewModel.SaveAndClose` v1.
 #[tauri::command]
-pub fn save_session(state: State<'_, AppState>, draft: SessionDraft) -> CmdResult<SessionView> {
+pub fn save_session(app: AppHandle, state: State<'_, AppState>, draft: SessionDraft) -> CmdResult<SessionView> {
     if draft.host.trim().is_empty() || draft.port == 0 || draft.username.trim().is_empty() {
         return Err("invalid".into());
     }
@@ -49,46 +49,53 @@ pub fn save_session(state: State<'_, AppState>, draft: SessionDraft) -> CmdResul
         s.encrypted_password = None;
         s.encrypted_passphrase = None;
     }
+    s.touch();
     state.sessions.update_session(&s).map_err(|e| e.to_string())?;
+    super::sync::notify_changed(&app);
     Ok(SessionView::from(&s))
 }
 
 #[tauri::command]
-pub fn delete_sessions(state: State<'_, AppState>, ids: Vec<Uuid>) -> CmdResult<usize> {
-    let mut all = state.sessions.load().sessions;
-    let before = all.len();
-    all.retain(|s| !ids.contains(&s.id));
-    state.sessions.save(&all).map_err(|e| e.to_string())?;
-    Ok(before - all.len())
+pub fn delete_sessions(app: AppHandle, state: State<'_, AppState>, ids: Vec<Uuid>) -> CmdResult<usize> {
+    let n = state.sessions.delete_sessions(&ids).map_err(|e| e.to_string())?;
+    super::sync::notify_changed(&app);
+    Ok(n)
 }
 
 #[tauri::command]
-pub fn duplicate_session(state: State<'_, AppState>, id: Uuid) -> CmdResult<SessionView> {
+pub fn duplicate_session(app: AppHandle, state: State<'_, AppState>, id: Uuid) -> CmdResult<SessionView> {
     let s = state.sessions.find(id).ok_or("not found")?;
     let clone = s.duplicate();
     state.sessions.update_session(&clone).map_err(|e| e.to_string())?;
+    super::sync::notify_changed(&app);
     Ok(SessionView::from(&clone))
 }
 
 #[tauri::command]
-pub fn move_sessions_to_group(state: State<'_, AppState>, ids: Vec<Uuid>, group: String) -> CmdResult<()> {
+pub fn move_sessions_to_group(app: AppHandle, state: State<'_, AppState>, ids: Vec<Uuid>, group: String) -> CmdResult<()> {
     let mut all = state.sessions.load().sessions;
     for s in all.iter_mut().filter(|s| ids.contains(&s.id)) {
         s.group = group.trim().to_string();
+        s.touch();
     }
-    state.sessions.save(&all).map_err(|e| e.to_string())
+    state.sessions.save(&all).map_err(|e| e.to_string())?;
+    super::sync::notify_changed(&app);
+    Ok(())
 }
 
 #[tauri::command]
-pub fn rename_group(state: State<'_, AppState>, old_name: String, new_name: String) -> CmdResult<()> {
+pub fn rename_group(app: AppHandle, state: State<'_, AppState>, old_name: String, new_name: String) -> CmdResult<()> {
     if new_name.trim().is_empty() {
         return Ok(());
     }
     let mut all = state.sessions.load().sessions;
     for s in all.iter_mut().filter(|s| s.effective_group().eq_ignore_ascii_case(old_name.trim())) {
         s.group = new_name.trim().to_string();
+        s.touch();
     }
-    state.sessions.save(&all).map_err(|e| e.to_string())
+    state.sessions.save(&all).map_err(|e| e.to_string())?;
+    super::sync::notify_changed(&app);
+    Ok(())
 }
 
 /// Đọc file key để báo sớm "cần passphrase" / "không đọc được" trong form (như v1).

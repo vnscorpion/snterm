@@ -46,8 +46,15 @@ try {
   await page.screenshot({ path: `${out}/04-add-vm.png` });
   await page.keyboard.press('Escape');
 
-  // Cài đặt → Light
+  // Đồng bộ VM (hộp thoại thiết lập)
   await page.click('.toolbar .btn >> nth=4');
+  await page.waitForSelector('.modal');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${out}/09-sync-setup.png` });
+  await page.keyboard.press('Escape');
+
+  // Cài đặt → Light
+  await page.click('.toolbar .btn >> nth=5');
   await page.waitForSelector('.modal');
   await page.screenshot({ path: `${out}/05-settings.png` });
   await page.selectOption('#s-theme', 'Light');
@@ -60,7 +67,7 @@ try {
   await page.click('.toolbar .btn >> nth=2'); await page.waitForSelector('.modal'); await page.screenshot({ path: `${out}/07-export.png` }); await page.keyboard.press('Escape');
   await page.click('.toolbar .btn >> nth=3'); await page.waitForSelector('.modal'); await page.waitForTimeout(300); await page.screenshot({ path: `${out}/08-import.png` }); await page.keyboard.press('Escape');
   // Trở lại Dark/vi
-  await page.click('.toolbar .btn >> nth=4'); await page.selectOption('#s-theme', 'Dark'); await page.selectOption('#s-lang', 'vi'); await page.click('.modal-actions .btn.primary');
+  await page.click('.toolbar .btn >> nth=5'); await page.selectOption('#s-theme', 'Dark'); await page.selectOption('#s-lang', 'vi'); await page.click('.modal-actions .btn.primary');
   console.log('screenshots ok');
 } finally {
   await browser.close();

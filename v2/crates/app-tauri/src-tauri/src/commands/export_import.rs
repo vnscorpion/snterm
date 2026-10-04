@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 use snterm_core::crypto::snterm_file::{self, ConflictResolution, ExportFile, ImportPreviewItem, ImportResult};
-use tauri::State;
+use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use crate::state::AppState;
@@ -69,7 +69,7 @@ pub fn import_inspect(state: State<'_, AppState>, path: String) -> CmdResult<Imp
 }
 
 #[tauri::command]
-pub fn import_sessions(state: State<'_, AppState>, path: String, password: Option<String>, resolution: ConflictResolution) -> CmdResult<ImportResult> {
+pub fn import_sessions(app: AppHandle, state: State<'_, AppState>, path: String, password: Option<String>, resolution: ConflictResolution) -> CmdResult<ImportResult> {
     let file: ExportFile = snterm_file::read_and_validate(&PathBuf::from(&path)).map_err(|e| e.translate(&state.language(), None))?;
     let r = snterm_file::import(&state.sessions, &file, password.as_deref(), resolution).map_err(|e| match e {
         snterm_core::error::CoreError::WrongPassword => "wrong_password".to_string(),
@@ -80,6 +80,7 @@ pub fn import_sessions(state: State<'_, AppState>, path: String, password: Optio
         s.last_import_folder = dir.display().to_string();
         let _ = state.settings_store.save(&s);
     }
+    super::sync::notify_changed(&app);
     Ok(r)
 }
 

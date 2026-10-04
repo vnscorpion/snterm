@@ -278,8 +278,10 @@ pub async fn start_connection(app: AppHandle, inner: Arc<TabInner>) {
                             let mut s = inner.session.lock().await;
                             s.save_password = true;
                             s.encrypted_password = dpapi::encrypt(Some(pw.as_str()));
+                            s.touch();
                             let _ = state.sessions.update_session(&s);
                             let _ = app.emit("sessions:changed", ());
+                            crate::commands::sync::notify_changed(&app);
                         }
                         *inner.cached_password.lock().await = Some(pw);
                     }

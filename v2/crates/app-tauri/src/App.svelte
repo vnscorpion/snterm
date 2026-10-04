@@ -8,6 +8,7 @@
   import { sessions } from './stores/sessions.svelte';
   import { tabs, type Tab } from './stores/tabs.svelte';
   import { ui } from './stores/ui.svelte';
+  import { sync } from './stores/sync.svelte';
   import Toolbar from './components/Toolbar.svelte';
   import StatusBar from './components/StatusBar.svelte';
   import SessionList from './components/sessions/SessionList.svelte';
@@ -22,11 +23,13 @@
   import ImportDialog from './components/dialogs/ImportDialog.svelte';
   import HostKeyDialog from './components/dialogs/HostKeyDialog.svelte';
   import PasswordDialog from './components/dialogs/PasswordDialog.svelte';
+  import SyncSetupDialog from './components/dialogs/SyncSetupDialog.svelte';
 
   let ready = $state(false);
   let leftWidth = $state(400);
   let editor = $state<{ editing: SessionView | null; group: string } | null>(null);
   let showSettings = $state(false);
+  let showSyncSetup = $state(false);
   let exportSel = $state<SessionView[] | null | undefined>(undefined);
   let importPath = $state<string | null | undefined>(undefined);
   let dialogReq = $state<DialogRequest | null>(null);
@@ -73,7 +76,7 @@
     }
   }
   function onWindowKey(e: KeyboardEvent) {
-    if (ui.boxes.length || editor || showSettings || exportSel !== undefined || importPath !== undefined || dialogReq) return;
+    if (ui.boxes.length || editor || showSettings || showSyncSetup || exportSel !== undefined || importPath !== undefined || dialogReq) return;
     if (e.ctrlKey && e.key === 'Tab') { e.preventDefault(); e.shiftKey ? tabs.selectPrev() : tabs.selectNext(); }
     else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'w') { e.preventDefault(); if (tabs.selected) closeTab(tabs.selected); }
     else if (e.altKey && e.key >= '1' && e.key <= '9') { e.preventDefault(); tabs.selectIndex(parseInt(e.key, 10) - 1); }
@@ -98,6 +101,7 @@
     await settings.load();
     leftWidth = settings.value.LeftColumnWidth >= 140 && settings.value.LeftColumnWidth <= 600 ? settings.value.LeftColumnWidth : 400;
     await sessions.init();
+    await sync.init();
     if (sessions.recovered) ui.message(t('Str_WarningTitle'), t('Str_RecoveredCorrupt'), 'warn');
     ready = true;
 
@@ -122,6 +126,7 @@
         const n = tabs.connectedCount;
         if (n > 0) { ev.preventDefault(); if (!(await ui.confirm(t('Str_ConfirmCloseTitle'), t('Str_ConfirmCloseApp', n), 'question'))) return; }
         saveWindowState();
+        await invoke('sync_flush').catch(() => {});
         await tabs.closeAll();
         if (n > 0) win.destroy();
       });
@@ -135,7 +140,8 @@
 
 {#if ready}
 <div class="root">
-  <Toolbar onconnect={connectSelected} onadd={() => (editor = { editing: null, group: '' })} onexport={() => (exportSel = null)} onimport={() => (importPath = null)} onsettings={() => (showSettings = true)} />
+  <Toolbar onconnect={connectSelected} onadd={() => (editor = { editing: null, group: '' })} onexport={() => (exportSel = null)} onimport={() => (importPath = null)} onsettings={() => (showSettings = true)}
+           onsync={() => { if (!sync.enabled) showSyncSetup = true; else if (sync.status?.state === 'needPassword') sync.askPassword(); else sync.runNow(); }} />
   <div class="main">
     <div class="left" style="width:{leftWidth}px">
       <div class="left-tabs">
@@ -163,14 +169,15 @@
       </div>
     </div>
   </div>
-  <StatusBar text={statusText} />
+  <StatusBar text={statusText} right={sync.statusText} rightError={sync.isError} onrightclick={() => { if (sync.status?.state === 'needPassword') sync.askPassword(); else showSettings = true; }} />
 </div>
 {/if}
 
 {#if editor}
   <SessionEditor editing={editor.editing} initialGroup={editor.group} oncancel={() => (editor = null)} onsaved={(s, c) => { editor = null; if (c) connect(s); }} />
 {/if}
-{#if showSettings}<SettingsDialog onclose={() => (showSettings = false)} />{/if}
+{#if showSettings}<SettingsDialog onclose={() => (showSettings = false)} onsetup={() => (showSyncSetup = true)} />{/if}
+{#if showSyncSetup}<SyncSetupDialog onclose={() => (showSyncSetup = false)} />{/if}
 {#if exportSel !== undefined}<ExportDialog preselected={exportSel} onclose={() => (exportSel = undefined)} />{/if}
 {#if importPath !== undefined}<ImportDialog initialPath={importPath} onclose={() => (importPath = undefined)} onimported={() => sessions.load()} />{/if}
 {#if dialogReq?.kind === 'hostKey'}

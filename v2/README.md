@@ -30,6 +30,8 @@ npm run tauri dev            # chạy thử có hot-reload
 
 Bản portable chỉ cần một file `snterm.exe` (tài nguyên web đã nhúng trong exe). Bộ cài NSIS tự tải WebView2 nếu máy chưa có.
 
+Nếu build thẳng bằng `cargo build --release` (không qua `npm run tauri build`), phải thêm `--features tauri/custom-protocol`, nếu không exe sẽ đi tìm máy chủ dev `localhost:1420` và hiện "can't reach this page". Cross-compile thử từ Linux: `rustup target add x86_64-pc-windows-gnu`, cài `gcc-mingw-w64-x86-64`, rồi `cargo build --release --target x86_64-pc-windows-gnu -p snterm --features tauri/custom-protocol` và chép `WebView2Loader.dll` (trong `target/.../build/webview2-com-sys-*/out/x64/`) cạnh exe.
+
 ## Kiểm thử
 
 ```bash

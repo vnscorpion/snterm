@@ -6,7 +6,7 @@ import { mkdirSync } from 'node:fs';
 const root = '/home/user/snterm/v2/crates/app-tauri';
 const out = '/home/user/snterm/v2/crates/app-tauri/scripts/out';
 mkdirSync(out, { recursive: true });
-const server = spawn('npx', ['vite', 'preview', '--port', '4173', '--strictPort'], { cwd: root, stdio: 'pipe' });
+const server = spawn('npx', ['vite', 'preview', '--port', '4173', '--strictPort'], { cwd: root, stdio: 'pipe', detached: true });
 await new Promise((r) => setTimeout(r, 2500));
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
 try {
@@ -23,6 +23,13 @@ try {
   await page.waitForTimeout(1200);
   await page.keyboard.type('ls -la');
   await page.screenshot({ path: `${out}/02-terminal-sftp.png` });
+  await page.hover('.mon .seg.os');
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: `${out}/02b-hover-os.png` });
+  await page.hover('.mon .seg.last');
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: `${out}/02c-hover-df.png` });
+  await page.mouse.move(600, 300);
 
   // Sessions tab + chọn nhiều + menu chuột phải
   await page.click('.ltab >> nth=0');
@@ -57,5 +64,6 @@ try {
   console.log('screenshots ok');
 } finally {
   await browser.close();
-  server.kill();
+  try { process.kill(-server.pid, 'SIGTERM'); } catch { server.kill(); }
+  setTimeout(() => process.exit(0), 300);
 }

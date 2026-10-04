@@ -1,5 +1,6 @@
 <script lang="ts">
   // Thanh "Server Monitor" dưới terminal (như v1 MonitorBar): OS, hostname, CPU, RAM, mạng, uptime, user, đĩa.
+  // Hover vào hostname → thông tin hệ thống; hover vào đĩa → output `df -h` (giống tooltip WPF v1).
   import { untrack } from 'svelte';
   import { t } from '../../lib/i18n.svelte';
   import type { MonitorInfo } from '../../lib/types';
@@ -15,25 +16,22 @@
     const step = h.length > 1 ? w / (h.length - 1) : w;
     return h.map((v, i) => `${(i * step).toFixed(1)},${(hh - (Math.min(100, Math.max(0, v)) / 100) * (hh - 2) - 1).toFixed(1)}`).join(' ');
   }
-  let showOs = $state(false);
-  let showDf = $state(false);
+  // Tooltip dùng position:fixed để không bị thanh (overflow-x:auto) cắt mất.
+  let tip = $state<{ kind: 'os' | 'df'; left: number; bottom: number; alignRight: boolean } | null>(null);
+  let hideTimer: ReturnType<typeof setTimeout> | null = null;
+  function show(kind: 'os' | 'df', e: MouseEvent) {
+    if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    tip = { kind, left: r.left, bottom: window.innerHeight - r.top + 4, alignRight: r.left > window.innerWidth / 2 };
+  }
+  function hide() { hideTimer = setTimeout(() => (tip = null), 120); }
+  function keepOpen() { if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; } }
 </script>
 
 <div class="mon">
-  <div class="seg os" onmouseenter={() => (showOs = true)} onmouseleave={() => (showOs = false)} role="note">
+  <div class="seg os hoverable" onmouseenter={(e) => show('os', e)} onmouseleave={hide} role="note" title="">
     <img src={`/os/os_${info.osGroup || 'linux'}.png`} alt="" width="15" height="15" onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')} />
     <span class="host">{info.hostname}</span>
-    {#if showOs}
-      <div class="tip">
-        <div class="tip-title">{t('Str_SystemInfo')}</div>
-        <div class="grid">
-          <span class="k">{t('Str_HostnameLabel')}</span><span class="v hn">{info.hostname || '--'}</span>
-          <span class="k">{t('Str_OsLabel')}</span><span class="v os">{info.osPretty || info.osGroup || '--'}</span>
-          <span class="k">{t('Str_KernelLabel')}</span><span class="v kr">{info.kernel || '--'}</span>
-          <span class="k">{t('Str_ArchLabel')}</span><span class="v">{info.arch || '--'}</span>
-        </div>
-      </div>
-    {/if}
   </div>
   <div class="seg"><span class="ic" style="color:#FFA726">🖳</span><span>{info.cpuPercent}%</span><svg class="graph cpu" viewBox="0 0 40 14"><polyline points={points(cpuHist)} /></svg></div>
   <div class="seg"><span class="ic" style="color:#42A5F5">💾</span><span>{info.ramText}</span><svg class="graph ram" viewBox="0 0 40 14"><polyline points={points(ramHist)} /></svg></div>
@@ -41,32 +39,48 @@
   <div class="seg"><span class="ic" style="color:#29B6F6; font-weight:bold">⬇</span><span>{info.downloadText}</span></div>
   <div class="seg"><span class="ic" style="color:#AB47BC">⏱</span><span>{info.uptimeText}</span></div>
   <div class="seg"><span class="ic" style="color:#FFCA28">👤</span><span>{info.username}</span></div>
-  <div class="seg last" onmouseenter={() => (showDf = true)} onmouseleave={() => (showDf = false)} role="note">
+  <div class="seg last hoverable" onmouseenter={(e) => show('df', e)} onmouseleave={hide} role="note">
     <span class="ic" style="color:#26A69A">🖴</span><span>{info.diskText}</span>
-    {#if showDf}
-      <div class="tip df">
-        <div class="tip-title">{t('Str_DfOutputTitle')}</div>
-        <pre>{info.dfOutput || t('Str_NoDfData')}</pre>
-      </div>
-    {/if}
   </div>
 </div>
 
+{#if tip}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="tip" class:df={tip.kind === 'df'} style="bottom:{tip.bottom}px; {tip.alignRight ? `right:${Math.max(8, window.innerWidth - tip.left - 60)}px` : `left:${tip.left}px`}"
+       onmouseenter={keepOpen} onmouseleave={hide}>
+    {#if tip.kind === 'os'}
+      <div class="tip-title">{t('Str_SystemInfo')}</div>
+      <div class="grid">
+        <span class="k">{t('Str_HostnameLabel')}</span><span class="v hn">{info.hostname || '--'}</span>
+        <span class="k">{t('Str_OsLabel')}</span><span class="v os">{info.osPretty || info.osGroup || '--'}</span>
+        <span class="k">{t('Str_KernelLabel')}</span><span class="v kr">{info.kernel || '--'}</span>
+        <span class="k">{t('Str_ArchLabel')}</span><span class="v">{info.arch || '--'}</span>
+      </div>
+    {:else}
+      <div class="tip-title df">{t('Str_DfOutputTitle')}</div>
+      <pre>{info.dfOutput || t('Str_NoDfData')}</pre>
+    {/if}
+  </div>
+{/if}
+
 <style>
-  .mon { height: 26px; display: flex; align-items: center; gap: 0; padding: 0 6px; background: var(--monitor-bg); border-top: 1px solid var(--monitor-border); font-size: 11px; color: #e6edf3; overflow-x: auto; overflow-y: visible; white-space: nowrap; }
-  .seg { position: relative; display: flex; align-items: center; gap: 5px; padding-right: 8px; margin-right: 8px; border-right: 1px solid var(--monitor-border); height: 100%; }
+  .mon { height: 26px; display: flex; align-items: center; gap: 0; padding: 0 6px; background: var(--monitor-bg); border-top: 1px solid var(--monitor-border); font-size: 11px; color: #e6edf3; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+  .mon::-webkit-scrollbar { display: none; }
+  .seg { display: flex; align-items: center; gap: 5px; padding-right: 8px; margin-right: 8px; border-right: 1px solid var(--monitor-border); height: 100%; }
   .seg.last { border-right: none; }
+  .seg.hoverable { cursor: help; }
+  .seg.hoverable:hover { background: rgba(255,255,255,0.06); }
   .ic { font-size: 11px; }
   .host { color: #4ba3e3; font-weight: 600; }
   .graph { width: 40px; height: 14px; border: 1px solid #1b5e20; background: #0a1f0a; border-radius: 2px; }
   .graph polyline { fill: none; stroke: #00e676; stroke-width: 1.5; }
   .graph.ram { border-color: #1565c0; background: #0a192f; }
   .graph.ram polyline { stroke: #42a5f5; }
-  .tip { position: absolute; bottom: 28px; left: 0; z-index: 50; background: #22252a; border: 1px solid #3e4451; padding: 8px 10px; border-radius: 4px; box-shadow: 0 4px 16px rgba(0,0,0,0.5); color: #e6edf3; }
+  .tip { position: fixed; z-index: 500; background: #22252a; border: 1px solid #3e4451; padding: 8px 10px; border-radius: 4px; box-shadow: 0 4px 16px rgba(0,0,0,0.5); color: #e6edf3; font-size: 11px; max-width: 850px; }
   .tip-title { font-weight: 700; color: #61afef; margin-bottom: 6px; font-size: 12px; }
+  .tip-title.df { color: #fafafa; font-size: 11px; }
   .grid { display: grid; grid-template-columns: auto auto; column-gap: 10px; row-gap: 4px; }
   .k { color: #8b949e; }
   .v.hn { color: #fff; font-weight: 600; } .v.os { color: #98c379; } .v.kr { color: #e5c07b; }
-  .tip.df { right: 0; left: auto; max-width: 800px; }
-  .tip.df pre { margin: 0; max-height: 450px; overflow: auto; font-family: Consolas, 'Cascadia Code', 'JetBrains Mono', monospace; font-size: 11px; color: #d4d4d4; user-select: text; }
+  .tip pre { margin: 0; max-height: 450px; max-width: 800px; overflow: auto; font-family: Consolas, 'Cascadia Code', 'JetBrains Mono', monospace; font-size: 11px; color: #d4d4d4; user-select: text; }
 </style>

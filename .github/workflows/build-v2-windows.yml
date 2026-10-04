@@ -1,0 +1,57 @@
+name: Build SN Term v2 (Windows)
+
+on:
+  push:
+    branches: ["**"]
+    paths: ["v2/**", ".github/workflows/build-v2-windows.yml"]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: v2/crates/app-tauri
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: v2/crates/app-tauri/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: v2
+
+      - name: Cài dependency giao diện
+        run: npm ci
+
+      - name: Test giao diện
+        run: npm test
+
+      - name: Test lõi Rust
+        run: cargo test -p snterm-core
+        working-directory: v2
+
+      - name: Build Tauri (exe portable + bộ cài NSIS)
+        run: npm run tauri build
+
+      - name: Gom file
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item ..\..\target\release\snterm.exe out\SNTerm-v2-portable.exe
+          Copy-Item ..\..\target\release\bundle\nsis\*.exe out\
+          Get-ChildItem out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SNTerm-v2-windows
+          path: v2/crates/app-tauri/out/*
+          if-no-files-found: error

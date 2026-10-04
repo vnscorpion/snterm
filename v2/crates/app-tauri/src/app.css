@@ -1,0 +1,155 @@
+/* Biến màu từ ThemeManager.cs (v1) — Dark mặc định, Light qua [data-theme="light"] */
+:root {
+  --theme-window-bg: #1e1e1e;
+  --theme-toolbar-bg: #252526;
+  --theme-sidebar-bg: #252526;
+  --theme-border: #3c3c3c;
+  --theme-fg: #dcdcdc;
+  --theme-fg-muted: #a0a0a0;
+  --theme-input-bg: #2d2d30;
+  --theme-button-bg: #2d3139;
+  --theme-button-hover: #3a3f4b;
+  --theme-button-hover-border: #61afef;
+  --theme-button-hover-fg: #ffffff;
+  --theme-item-hover: #094771;
+  --theme-item-selected: #0e639c;
+  --theme-item-selected-fg: #ffffff;
+  --theme-status-bg: #1e1e1e;
+  --theme-card-bg: #252526;
+  --theme-popup-bg: #252526;
+  --theme-scrollbar-thumb: #555555;
+  --theme-scrollbar-thumb-hover: #737373;
+  --theme-connect-bg: #0e639c;
+  --theme-connect-fg: #ffffff;
+  --theme-connect-border: #1177bb;
+  --theme-connect-hover-bg: #1177bb;
+  --theme-connect-hover-border: #2896e0;
+  --theme-connect-active-bg: #0b4f7d;
+  --theme-tab-selected-bg: #1e1e1e;
+  --theme-tab-unselected-bg: #2d2d30;
+  --theme-tab-selected-fg: #ffffff;
+  --theme-tab-unselected-fg: #aaaaaa;
+  --theme-tabbar-bg: #2b2d30;
+  --theme-tabbar-border: #1e1e1e;
+  --terminal-bg: #1e1e1e;
+  --danger: #d92d20;
+  --warning: #f79009;
+  --status-connected: #52c41a;
+  --status-connecting: #faad14;
+  --status-off: #8c8c8c;
+  --monitor-bg: #16181a;
+  --monitor-border: #2d3139;
+}
+:root[data-theme="light"] {
+  --theme-window-bg: #ffffff;
+  --theme-toolbar-bg: #f8f9fa;
+  --theme-sidebar-bg: #fafafa;
+  --theme-border: #d0d5dd;
+  --theme-fg: #101828;
+  --theme-fg-muted: #667085;
+  --theme-input-bg: #ffffff;
+  --theme-button-bg: #f2f4f7;
+  --theme-button-hover: #e4e7ec;
+  --theme-button-hover-border: #98a2b3;
+  --theme-button-hover-fg: #101828;
+  --theme-item-hover: #ebf3ff;
+  --theme-item-selected: #d1e9ff;
+  --theme-item-selected-fg: #101828;
+  --theme-status-bg: #f2f4f7;
+  --theme-card-bg: #ffffff;
+  --theme-popup-bg: #ffffff;
+  --theme-scrollbar-thumb: #c1c1c1;
+  --theme-scrollbar-thumb-hover: #a8a8a8;
+  --theme-connect-bg: #1570ef;
+  --theme-connect-fg: #ffffff;
+  --theme-connect-border: #1570ef;
+  --theme-connect-hover-bg: #175cd3;
+  --theme-connect-hover-border: #175cd3;
+  --theme-connect-active-bg: #1849a9;
+  --theme-tab-selected-bg: #ffffff;
+  --theme-tab-unselected-bg: #f2f4f7;
+  --theme-tab-selected-fg: #101828;
+  --theme-tab-unselected-fg: #667085;
+  --theme-tabbar-bg: #e4e7ec;
+  --theme-tabbar-border: #d0d5dd;
+  --terminal-bg: #ffffff;
+}
+
+@font-face { font-family: 'JetBrains Mono'; src: url('/fonts/JetBrainsMono-Regular.woff2') format('woff2'); font-weight: normal; font-style: normal; font-display: block; }
+@font-face { font-family: 'JetBrains Mono'; src: url('/fonts/JetBrainsMono-Bold.woff2') format('woff2'); font-weight: bold; font-style: normal; font-display: block; }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
+body {
+  font-family: 'Segoe UI', 'Segoe UI Variable', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  color: var(--theme-fg);
+  background: var(--theme-window-bg);
+  user-select: none;
+  -webkit-user-select: none;
+}
+#app { width: 100%; height: 100%; }
+input, textarea, select { user-select: text; -webkit-user-select: text; font-family: inherit; font-size: 13px; }
+button { font-family: inherit; font-size: 13px; }
+
+/* Thanh cuộn kiểu VS Code */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--theme-scrollbar-thumb); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--theme-scrollbar-thumb-hover); background-clip: content-box; }
+
+/* Nút chung (ToolbarButtonStyle v1) */
+.btn {
+  display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px;
+  background: var(--theme-button-bg); color: var(--theme-fg);
+  border: 1px solid var(--theme-border); border-radius: 3px; cursor: pointer; line-height: 1.2;
+}
+.btn:hover { background: var(--theme-button-hover); border-color: var(--theme-button-hover-border); color: var(--theme-button-hover-fg); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.primary { background: var(--theme-connect-bg); color: var(--theme-connect-fg); border-color: var(--theme-connect-border); font-weight: 600; }
+.btn.primary:hover { background: var(--theme-connect-hover-bg); border-color: var(--theme-connect-hover-border); }
+.btn.primary:active { background: var(--theme-connect-active-bg); }
+.btn.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+.btn.small { padding: 4px 8px; font-size: 11px; }
+.btn.link { background: transparent; border: none; color: var(--danger); padding: 2px 4px; }
+
+.input {
+  width: 100%; padding: 6px 8px; background: var(--theme-input-bg); color: var(--theme-fg);
+  border: 1px solid var(--theme-border); border-radius: 3px; outline: none;
+}
+.input:focus { border-color: var(--theme-button-hover-border); }
+.input.error { border-color: var(--danger); }
+label.check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.muted { color: var(--theme-fg-muted); }
+.field-error { color: var(--danger); font-size: 11px; margin: 2px 0 6px; }
+.field-warn { color: var(--warning); font-size: 11px; margin: 2px 0 6px; }
+.form-label { display: block; margin: 0 0 3px; }
+.form-label.required { font-weight: 600; }
+.section-title { font-weight: 700; margin: 0 0 6px; }
+
+/* Modal */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.modal {
+  background: var(--theme-window-bg); color: var(--theme-fg); border: 1px solid var(--theme-border);
+  border-radius: 6px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); min-width: 360px; max-width: 92vw; max-height: 92vh;
+  display: flex; flex-direction: column;
+}
+.modal-title { padding: 10px 16px; font-weight: 700; font-size: 14px; border-bottom: 1px solid var(--theme-border); background: var(--theme-toolbar-bg); border-radius: 6px 6px 0 0; }
+.modal-body { padding: 14px 16px; overflow: auto; flex: 1; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--theme-border); }
+.modal-actions.left { justify-content: space-between; }
+
+/* Menu chuột phải */
+.ctx-menu {
+  position: fixed; z-index: 2000; min-width: 180px; padding: 4px 0;
+  background: var(--theme-popup-bg); border: 1px solid var(--theme-border); border-radius: 4px; box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+}
+.ctx-menu .item { padding: 6px 14px; cursor: pointer; display: flex; justify-content: space-between; gap: 20px; white-space: nowrap; }
+.ctx-menu .item:hover { background: var(--theme-item-hover); color: var(--theme-item-selected-fg); }
+.ctx-menu .item.disabled { opacity: 0.45; pointer-events: none; }
+.ctx-menu .sep { height: 1px; background: var(--theme-border); margin: 4px 0; }
+.ctx-menu .shortcut { color: var(--theme-fg-muted); font-size: 11px; }
+.ctx-menu .item:hover .shortcut { color: var(--theme-item-selected-fg); }
+
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
